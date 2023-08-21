@@ -1,36 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
 </head>
+
 <body>
     <video width="700" height="400" controls></video>
     <script>
-        const start = async() =>{
+        const start = async () => {
             const stream = await navigator.mediaDevices.getDisplayMedia({
-                video:{
-                    mediaSource:"screen",
+                video: {
+                    mediaSource: "screen",
                 }
             })
-            const data =[];
+            const data = [];
 
             const mediaRecorder = new MediaRecorder(stream);
 
-            mediaRecorder.ondataavailable =(e) =>{
+            mediaRecorder.ondataavailable = (e) => {
                 data.push(e.data);
             }
             mediaRecorder.start();
-            mediaRecorder.onstop =(e)=>{
-                document.querySelector("video").src =URL.createObjectURL(
-                    new Blob(data,{
-                        type:data[0].type,
+            mediaRecorder.onstop = (e) => {
+                document.querySelector("video").src = URL.createObjectURL(
+                    new Blob(data, {
+                        type: data[0].type,
                     })
                 )
+
+                const chunkSize = 100 * 1024; // 100 KB chunks
+                const videoBlob = new Blob(data, { type: data[0].type });
+
+                const totalChunks = Math.ceil(videoBlob.size / chunkSize);
+                const chunks = [];
+
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * chunkSize;
+                    const end = Math.min(start + chunkSize, videoBlob.size);
+                    const chunkBlob = videoBlob.slice(start, end);
+                    chunks.push(chunkBlob);
+                }
+
+                console.log('chunks', chunks)
+                chunks.forEach((chunk, index) => {
+                    const formData = new FormData();
+                    formData.append('chunk', chunk);
+                    formData.append('chunkIndex', index);
+                    formData.append('totalChunks', totalChunks);
+                    
+
+                    fetch('/upload-chunk', {
+                        method: 'POST',
+                        body: formData,
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log('Backend response:', data);
+                        })
+                        .catch(error => {
+                            console.error('Error sending chunk:', error);
+                        });
+                });
             }
         }
+
         start();
     </script>
 </body>
+
 </html>
